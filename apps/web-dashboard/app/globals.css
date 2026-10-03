@@ -2,19 +2,116 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #030712;
-  --foreground: #f9fafb;
+/*
+ * Colour tokens are RGB triplets so Tailwind opacity modifiers work
+ * (e.g. bg-surface/80). Each pastel hue has three steps:
+ *   soft – badge / chip fill
+ *   dot  – indicator dots, bars
+ *   ink  – text on the soft fill
+ */
+@layer base {
+  :root {
+    --bg:          250 247 242;
+    --surface:     255 253 250;
+    --sunken:      244 239 231;
+    --line:        232 224 212;
+    --line-strong: 214 203 188;
+    --ink:          43  37  32;
+    --ink-muted:   112 101  91;
+    --ink-faint:   158 147 135;
+
+    --accent:       184  92  56;
+    --accent-hover: 163  79  46;
+    --accent-fg:    255 250 245;
+    --accent-soft:  251 228 214;
+
+    --sky-soft:      222 234 244;  --sky-dot:      128 167 204;  --sky-ink:       46  92 135;
+    --butter-soft:   250 238 199;  --butter-dot:   222 184  92;  --butter-ink:   122  90  20;
+    --lavender-soft: 233 226 245;  --lavender-dot: 161 141 204;  --lavender-ink:  88  66 140;
+    --sage-soft:     221 236 220;  --sage-dot:     125 172 128;  --sage-ink:      52 102  60;
+    --rose-soft:     248 221 219;  --rose-dot:     220 128 122;  --rose-ink:     150  52  48;
+    --peach-soft:    252 228 212;  --peach-dot:    230 150 110;  --peach-ink:    150  72  36;
+    --stone-soft:    236 231 224;  --stone-dot:    168 158 146;  --stone-ink:     98  89  80;
+
+    --shadow: 60 40 20;
+    color-scheme: light;
+  }
+
+  .dark {
+    --bg:           24  21  19;
+    --surface:      33  29  26;
+    --sunken:       28  25  22;
+    --line:         52  46  41;
+    --line-strong:  72  64  57;
+    --ink:         240 233 224;
+    --ink-muted:   168 157 145;
+    --ink-faint:   122 113 103;
+
+    --accent:       232 158 122;
+    --accent-hover: 240 177 146;
+    --accent-fg:     36  22  15;
+    --accent-soft:   62  42  33;
+
+    --sky-soft:      33  45  58;  --sky-dot:      120 160 200;  --sky-ink:      170 202 232;
+    --butter-soft:   52  45  26;  --butter-dot:   210 176  90;  --butter-ink:   236 212 150;
+    --lavender-soft: 44  38  60;  --lavender-dot: 155 138 200;  --lavender-ink: 200 188 236;
+    --sage-soft:     32  48  35;  --sage-dot:     120 168 124;  --sage-ink:     170 214 172;
+    --rose-soft:     60  33  32;  --rose-dot:     214 120 114;  --rose-ink:     240 176 170;
+    --peach-soft:    60  40  30;  --peach-dot:    226 146 106;  --peach-ink:    244 190 160;
+    --stone-soft:    44  40  36;  --stone-dot:    140 130 120;  --stone-ink:    196 186 174;
+
+    --shadow: 0 0 0;
+    color-scheme: dark;
+  }
+
+  html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+
+  body {
+    background: rgb(var(--bg));
+    color: rgb(var(--ink));
+    font-feature-settings: "ss01", "cv11";
+  }
+
+  ::selection { background: rgb(var(--accent-soft)); color: rgb(var(--ink)); }
+
+  :focus-visible { outline: 2px solid rgb(var(--accent) / 0.6); outline-offset: 2px; }
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: system-ui, -apple-system, sans-serif;
+@layer components {
+  .field {
+    @apply w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink
+           placeholder:text-ink-faint transition-colors
+           hover:border-line-strong focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/15;
+  }
+  .label {
+    @apply mb-1.5 block text-[13px] font-medium text-ink-muted;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium
+           transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary { @apply btn bg-accent text-accent-fg hover:bg-accent-hover shadow-sm; }
+  .btn-ghost   { @apply btn text-ink-muted hover:bg-sunken hover:text-ink; }
+  .btn-outline { @apply btn border border-line bg-surface text-ink hover:border-line-strong hover:bg-sunken; }
+  .btn-danger  { @apply btn border border-rose-dot/40 bg-rose-soft text-rose-ink hover:border-rose-dot; }
+  .icon-btn {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-muted transition-colors
+           hover:bg-sunken hover:text-ink;
+  }
+  .card { @apply rounded-xl border border-line bg-surface shadow-soft; }
 }
 
-.scrollbar-thin::-webkit-scrollbar { width: 4px; }
-.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-.scrollbar-thin::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
+.scrollbar-thin { scrollbar-width: thin; scrollbar-color: rgb(var(--line-strong)) transparent; }
+.scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: rgb(var(--line-strong)); border-radius: 3px; }
+
+@keyframes slide-in { from { transform: translateX(16px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fade-up  { from { transform: translateY(6px);  opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fade     { from { opacity: 0; } to { opacity: 1; } }
+.animate-slide-in { animation: slide-in .22s cubic-bezier(.2,.8,.2,1); }
+.animate-fade-up  { animation: fade-up  .2s  cubic-bezier(.2,.8,.2,1); }
+.animate-fade     { animation: fade .18s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-in, .animate-fade-up, .animate-fade { animation: none; }
+}

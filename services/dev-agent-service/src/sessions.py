@@ -33,8 +33,20 @@ logger = logging.getLogger("dev-agent.sessions")
 _locks: Dict[str, asyncio.Lock] = {}
 
 
+MAX_SLUG = 40
+
+
 def branch_name(ticket: Dict) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", ticket["title"].lower()).strip("-")[:40].rstrip("-")
+    """apm/APM-x-<slug>, with the slug cut at a word boundary (never mid-word)."""
+    words = re.sub(r"[^a-z0-9]+", " ", ticket["title"].lower()).split()
+    slug = ""
+    for word in words:
+        candidate = f"{slug}-{word}" if slug else word
+        if len(candidate) > MAX_SLUG:
+            break
+        slug = candidate
+    if not slug and words:              # a single very long first word
+        slug = words[0][:MAX_SLUG]
     return f"apm/{ticket['ticket_id']}-{slug}" if slug else f"apm/{ticket['ticket_id']}"
 
 
@@ -54,7 +66,8 @@ def _mcp_python() -> str:
     return MCP_PYTHON if MCP_PYTHON != "python" else sys.executable
 
 
-def _prepare_workspace(settings: AgentSettings, ticket: Dict) -> Tuple[Optional[Path], Optional[Path], Optional[str], Optional[str], bool, List[str]]:
+def _prepare_workspace(settings: AgentSettings, ticket: Dict, existing_branch: Optional[str] = None,
+                       ) -> Tuple[Optional[Path], Optional[Path], Optional[str], Optional[str], bool, List[str]]:
     """Returns (repo, workdir, branch, base_branch, branch_created, notes). Runs in a thread."""
     notes: List[str] = []
     try:
@@ -65,7 +78,8 @@ def _prepare_workspace(settings: AgentSettings, ticket: Dict) -> Tuple[Optional[
         return None, None, None, None, False, [
             "No repository is linked yet, so this brief has no code context. Link one in Agent settings."]
 
-    branch = branch_name(ticket)
+    # Keep the branch of an earlier session so a renamed ticket reuses its worktree.
+    branch = existing_branch or branch_name(ticket)
     base = git.default_branch(repo, settings.base_branch)
     if not settings.use_worktrees:
         notes.append(f"Worktrees are disabled – create the branch yourself: git switch -c {branch}")
@@ -127,7 +141,10 @@ async def _prepare(ticket_id: str, settings: AgentSettings, agent: str, include_
         tickets.get_optional(ticket.get("parent_id")), tickets.get_optional(ticket.get("duplicate_of")),
     )
 
-    repo, workdir, branch, base, branch_created, notes = await asyncio.to_thread(_prepare_workspace, settings, ticket)
+    previous = load_sessions().get(tid)
+    existing_branch = previous["branch"] if previous and previous.get("branch_created") else None
+    repo, workdir, branch, base, branch_created, notes = await asyncio.to_thread(
+        _prepare_workspace, settings, ticket, existing_branch)
 
     code = None
     if workdir:
@@ -163,9 +180,9 @@ async def _prepare(ticket_id: str, settings: AgentSettings, agent: str, include_
         "test_commands": (code or {}).get("test_commands", []),
         "ai_plan": plan is not None,
         "notes": notes,
-        "created_at": (load_sessions().get(tid) or {}).get("created_at") or datetime.now(timezone.utc).isoformat(),
+        "created_at": (previous or {}).get("created_at") or datetime.now(timezone.utc).isoformat(),
     }
-    refreshed = tid in load_sessions()
+    refreshed = previous is not None
     save_session(tid, session)
 
     where = f" on branch {branch}" if branch_created else ""

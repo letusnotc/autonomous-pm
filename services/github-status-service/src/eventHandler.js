@@ -20,18 +20,21 @@ async function handlePullRequest(payload) {
   if (!ticketIds.length) return;
 
   for (const ticketId of ticketIds) {
-    let newStatus = null, message = null;
+    let newStatus = null, message = null, verb = null;
     if (action === "opened" || action === "reopened") {
-      newStatus = "In Progress";
+      newStatus = "In Progress"; verb = action;
       message = `🔀 PR #${pr.number} opened: <${pr.html_url}|${pr.title}>`;
     } else if (action === "closed" && pr.merged) {
-      newStatus = "Done";
+      newStatus = "Done"; verb = "merged";
       message = `✅ PR #${pr.number} merged: <${pr.html_url}|${pr.title}>`;
     } else if (action === "closed" && !pr.merged) {
-      newStatus = "Open";
+      newStatus = "Open"; verb = "closed without merging";
       message = `❌ PR #${pr.number} closed (not merged): <${pr.html_url}|${pr.title}>`;
     }
-    if (newStatus) await updateAndNotify(ticketId, newStatus, message);
+    if (newStatus) {
+      const reason = `PR #${pr.number} ${verb}: ${pr.title} (${pr.html_url})`;
+      await updateAndNotify(ticketId, newStatus, message, reason);
+    }
   }
 }
 
@@ -45,7 +48,8 @@ async function handlePush(payload) {
   const branch = payload.ref?.replace("refs/heads/", "") || "unknown";
   for (const ticketId of allIds) {
     await updateAndNotify(ticketId, "In Progress",
-      `📦 Commit pushed to \`${branch}\` referencing *${ticketId}*`);
+      `📦 Commit pushed to \`${branch}\` referencing *${ticketId}*`,
+      `Commit pushed to ${branch}`);
   }
 }
 
@@ -57,12 +61,14 @@ async function handleIssues(payload) {
   let newStatus = null, message = null;
   if (action === "closed")   { newStatus = "Done"; message = `✅ GitHub Issue #${issue.number} closed`; }
   if (action === "reopened") { newStatus = "Open"; message = `🔁 GitHub Issue #${issue.number} reopened`; }
-  if (newStatus) for (const id of ticketIds) await updateAndNotify(id, newStatus, message);
+  const reason = `GitHub issue #${issue.number} ${action}: ${issue.title}`;
+  if (newStatus) for (const id of ticketIds) await updateAndNotify(id, newStatus, message, reason);
 }
 
-async function updateAndNotify(ticketId, status, slackMessage) {
+async function updateAndNotify(ticketId, status, slackMessage, reason) {
   try {
-    await updateTicket(ticketId, { status });
+    // actor/reason show up on the ticket's timeline
+    await updateTicket(ticketId, { status, actor: "github", reason });
     console.log(`[handler] Ticket ${ticketId} → '${status}'`);
     if (slackMessage && process.env.SLACK_NOTIFY_CHANNEL) await notifySlack(slackMessage);
   } catch (err) {

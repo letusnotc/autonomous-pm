@@ -74,12 +74,15 @@ class PriorityAgent:
             except httpx.ConnectError:
                 raise RuntimeError(f"Cannot connect to Ticket Service at {TICKET_SERVICE_URL}")
 
-    async def update_ticket_priority(self, ticket_id: str, priority: str, score: int) -> bool:
+    async def update_ticket_priority(self, ticket_id: str, priority: str, score: int,
+                                     reasoning: str = "") -> bool:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
             try:
                 resp = await client.put(
                     f"{TICKET_SERVICE_URL}/tickets/{ticket_id}",
-                    json={"priority": priority, "priority_score": score},
+                    # actor/reason feed the ticket timeline so the AI's decision is explainable
+                    json={"priority": priority, "priority_score": score,
+                          "actor": "priority-agent", "reason": reasoning or None},
                 )
                 return resp.status_code in (200, 204)
             except Exception as e:
@@ -120,7 +123,7 @@ class PriorityAgent:
             source = ticket_map.get(tid, {})
             pl = p.get("assigned_priority", "Medium")
             score = int(p.get("priority_score", 50))
-            updated = await self.update_ticket_priority(tid, pl, score)
+            updated = await self.update_ticket_priority(tid, pl, score, p.get("reasoning", ""))
 
             results.append(TicketPriority(
                 ticket_id=tid,

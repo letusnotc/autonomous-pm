@@ -83,10 +83,29 @@ async def init_db():
             {"$setOnInsert": {"seq": 0}},
             upsert=True,
         )
+        await db.ticket_events.create_index([("ticket_id", 1), ("created_at", 1)])
     else:
         from . import models  # noqa: F401
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(_add_missing_columns)
+
+
+# Columns added after the first release. create_all() never alters existing
+# tables, so add them here for databases created by older versions.
+_ADDED_COLUMNS = {
+    "tickets": {"parent_id": "INTEGER", "duplicate_of": "INTEGER"},
+}
+
+
+def _add_missing_columns(sync_conn):
+    from sqlalchemy import inspect, text
+    inspector = inspect(sync_conn)
+    for table, columns in _ADDED_COLUMNS.items():
+        existing = {c["name"] for c in inspector.get_columns(table)}
+        for name, ddl_type in columns.items():
+            if name not in existing:
+                sync_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl_type}"))
 
 
 async def get_db():

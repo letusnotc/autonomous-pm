@@ -23,6 +23,8 @@ class TicketCreate(BaseModel):
     source:           Optional[str] = Field("api")
     channel:          Optional[str] = None
     slack_message_ts: Optional[str] = None
+    parent_id:        Optional[str] = Field(None, description="Parent ticket, e.g. APM-3")
+    actor:            Optional[str] = Field(None, description="Who is creating it (for the timeline)")
 
 
 class TicketUpdate(BaseModel):
@@ -34,6 +36,12 @@ class TicketUpdate(BaseModel):
     priority_score:   Optional[int] = Field(None, ge=1, le=100)
     assignee:         Optional[str] = None
     reported_by:      Optional[str] = None
+    # Links: "APM-3" sets the link, "" clears it
+    parent_id:        Optional[str] = None
+    duplicate_of:     Optional[str] = None
+    # Timeline metadata – not stored on the ticket itself
+    actor:            Optional[str] = Field(None, description="Who made the change, e.g. priority-agent")
+    reason:           Optional[str] = Field(None, description="Why – shown on the timeline")
 
 
 class TicketAssign(BaseModel):
@@ -54,6 +62,8 @@ class TicketResponse(BaseModel):
     source:           Optional[str]
     channel:          Optional[str]
     slack_message_ts: Optional[str]
+    parent_id:        Optional[str] = None
+    duplicate_of:     Optional[str] = None
     created_at:       datetime
     updated_at:       datetime
 
@@ -76,3 +86,57 @@ class DashboardStats(BaseModel):
     success_rate:      float
     by_status:         Dict[str, int]
     by_priority:       Dict[str, int]
+
+
+# ── Timeline ─────────────────────────────────────────────────────────────────
+EVENT_KINDS = {
+    "created", "status_changed", "priority_changed", "assigned", "edited",
+    "linked", "possible_duplicates", "subtasks_created", "agent_session", "note",
+}
+
+
+class TicketEventCreate(BaseModel):
+    kind:    str            = Field("note")
+    actor:   Optional[str]  = None
+    summary: str            = Field(..., min_length=1, max_length=2000)
+    data:    Optional[Dict[str, Any]] = None
+
+
+class TicketEventResponse(BaseModel):
+    id:         int
+    ticket_id:  str
+    kind:       str
+    actor:      Optional[str]
+    summary:    str
+    data:       Optional[Dict[str, Any]] = None
+    created_at: datetime
+
+
+# ── Similarity / duplicates ──────────────────────────────────────────────────
+class SimilarQuery(BaseModel):
+    title:       str           = Field(..., min_length=1)
+    description: Optional[str] = None
+    limit:       int           = Field(5, ge=1, le=20)
+    min_score:   float         = Field(0.2, ge=0, le=1)
+
+
+class SimilarTicket(BaseModel):
+    ticket_id: str
+    title:     str
+    status:    str
+    priority:  str
+    score:     float
+
+
+# ── Sub-tasks ────────────────────────────────────────────────────────────────
+class SubtaskItem(BaseModel):
+    title:       str           = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    ticket_type: Optional[str] = "task"
+    priority:    Optional[str] = None
+    assignee:    Optional[str] = None
+
+
+class SubtaskBatch(BaseModel):
+    subtasks: List[SubtaskItem] = Field(..., min_length=1, max_length=20)
+    actor:    Optional[str]     = None

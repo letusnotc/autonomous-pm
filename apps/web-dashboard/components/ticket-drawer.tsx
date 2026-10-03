@@ -110,6 +110,18 @@ export function TicketDrawer({ ticket, onClose, onUpdated, onDeleted, onOpenTick
 
   useEffect(() => { setTab('overview'); setDismissed(false); setEventsLoading(true); }, [id]);
   useEffect(() => { loadEvents(); }, [loadEvents, ticket.updated_at]);
+
+  // Coding agents log notes through MCP without changing the ticket itself, so
+  // keep the timeline fresh while it is on screen.
+  useEffect(() => {
+    if (tab !== 'activity') return;
+    loadEvents();
+    const timer = setInterval(() => { if (!document.hidden) loadEvents(); }, 5000);
+    // Background tabs skip polling; catch up as soon as the tab is visible again.
+    const onVisible = () => { if (!document.hidden) loadEvents(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
+  }, [tab, loadEvents]);
   useEffect(() => { loadSubtasks(); }, [loadSubtasks]);
   useEffect(() => {
     if (ticket.parent_id) { setSimilar([]); return; }   // sub-tasks are related by design

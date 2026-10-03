@@ -23,13 +23,20 @@ _STOPWORDS = {
     "also", "just", "than", "there", "here", "about", "please", "need", "needs", "want", "make",
 }
 
-_SUFFIXES = ("ing", "edly", "ed", "es", "s")
+_SUFFIXES = ("ing", "edly", "ed")
+# Plurals that add "es" ("crashes", "boxes"); other words only drop the "s"
+# so "pages"/"page" and "issues"/"issue" stem to the same token.
+_ES_PLURALS = ("sses", "xes", "zes", "ches", "shes")
 
 
 def _stem(word: str) -> str:
     for suffix in _SUFFIXES:
         if len(word) > len(suffix) + 2 and word.endswith(suffix):
             return word[: -len(suffix)]
+    if len(word) > 4 and word.endswith(_ES_PLURALS):
+        return word[:-2]
+    if len(word) > 3 and word.endswith("s") and not word.endswith("ss"):
+        return word[:-1]
     return word
 
 

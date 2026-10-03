@@ -99,10 +99,9 @@ async def _call_gemini(prompt: str, system: str, temperature: float, max_tokens:
     # Combine system + user prompt (Gemini handles system via user turn)
     combined_prompt = f"{system}\n\n---\n\n{prompt}"
 
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
-    )
+    # The key goes in a header, never the URL: httpx logs request URLs at INFO
+    # and raise_for_status() puts the URL in its error message.
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
     payload = {
         "contents": [
             {"role": "user", "parts": [{"text": combined_prompt}]}
@@ -114,7 +113,11 @@ async def _call_gemini(prompt: str, system: str, temperature: float, max_tokens:
         },
     }
     async with httpx.AsyncClient(timeout=90) as client:
-        resp = await client.post(url, json=payload, headers={"Content-Type": "application/json"})
+        resp = await client.post(
+            url,
+            json=payload,
+            headers={"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"},
+        )
         resp.raise_for_status()
         data = resp.json()
         # Extract text from Gemini response structure

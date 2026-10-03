@@ -39,6 +39,8 @@ export interface Ticket {
   source:           string | null;
   channel:          string | null;
   slack_message_ts: string | null;
+  parent_id:        string | null;   // e.g. "APM-4" when this is a sub-task
+  duplicate_of:     string | null;
   created_at:       string;
   updated_at:       string;
 }
@@ -60,6 +62,10 @@ export interface TicketUpdatePayload {
   priority?:       TicketPriority;
   priority_score?: number;
   assignee?:       string;
+  parent_id?:      string;   // "" clears
+  duplicate_of?:   string;   // "" clears
+  actor?:          string;
+  reason?:         string;
 }
 
 // ── List response ─────────────────────────────────────────────────────────────
@@ -89,6 +95,7 @@ export interface TicketFilter {
   ticket_type?: TicketType;
   assignee?:    string;
   search?:      string;
+  parent?:      string;
 }
 
 // ── API response wrapper ──────────────────────────────────────────────────────
@@ -99,4 +106,98 @@ export interface ApiResponse<T> {
   total?:  number;
   page?:   number;
   page_size?: number;
+}
+
+// ── Timeline ──────────────────────────────────────────────────────────────────
+export type TicketEventKind =
+  | "created" | "status_changed" | "priority_changed" | "assigned" | "edited"
+  | "linked" | "possible_duplicates" | "subtasks_created" | "agent_session" | "note";
+
+export interface TicketEvent {
+  id:         number;
+  ticket_id:  string;
+  kind:       TicketEventKind;
+  actor:      string | null;
+  summary:    string;
+  data:       Record<string, any> | null;
+  created_at: string;
+}
+
+// ── Similarity ────────────────────────────────────────────────────────────────
+export interface SimilarTicket {
+  ticket_id: string;
+  title:     string;
+  status:    TicketStatus;
+  priority:  TicketPriority;
+  score:     number;   // 0–1
+}
+
+// ── Breakdown ─────────────────────────────────────────────────────────────────
+export interface ProposedSubtask {
+  title:          string;
+  description:    string | null;
+  ticket_type:    TicketType;
+  estimate_hours: number | null;
+  depends_on:     number[];   // 1-based indexes into the proposal
+}
+
+export interface BreakdownProposal {
+  ticket_id: string;
+  summary:   string;
+  subtasks:  ProposedSubtask[];
+  model:     string;
+}
+
+// ── Coding-agent sessions ─────────────────────────────────────────────────────
+export type AgentKind = "claude-code" | "codex" | "cursor";
+
+export interface AgentSettings {
+  repo_path:      string | null;
+  repo_url:       string | null;
+  base_branch:    string | null;
+  workspaces_dir: string | null;
+  default_agent:  AgentKind;
+  auto_prepare:   boolean;
+  use_worktrees:  boolean;
+}
+
+export interface RepoStatus {
+  configured:      boolean;
+  ok?:             boolean;
+  error?:          string;
+  path?:           string;
+  branch?:         string;
+  base_branch?:    string;
+  commit?:         string;
+  remote?:         string;
+  workspaces_dir?: string;
+  llm_configured:  boolean;
+}
+
+export interface AgentCommand {
+  label:      string;
+  lines:      string[];
+  cli_lines?: string[];
+  deeplink?:  string;
+}
+
+export interface AgentSession {
+  ticket_id:       string;
+  agent:           AgentKind;
+  mode:            "manual";
+  repo_path:       string | null;
+  workdir:         string | null;
+  branch:          string | null;
+  branch_created:  boolean;
+  base_branch:     string | null;
+  brief_path:      string;
+  mcp_config_path: string;
+  codex_mcp_toml:  string;
+  commands:        Record<AgentKind, AgentCommand>;
+  relevant_files:  { path: string; matched: string[] }[];
+  test_commands:   string[];
+  ai_plan:         boolean;
+  notes:           string[];
+  created_at:      string;
+  updated_at:      string;
 }

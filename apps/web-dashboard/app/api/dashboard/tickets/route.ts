@@ -3,13 +3,14 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 
-const TICKET_SERVICE_URL = process.env.TICKET_SERVICE_URL || "http://localhost:3001";
+const TICKET_SERVICE_URL    = process.env.TICKET_SERVICE_URL    || "http://localhost:3001";
+const DEV_AGENT_SERVICE_URL = process.env.DEV_AGENT_SERVICE_URL || "http://localhost:3007";
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const upstream = new URLSearchParams();
-    ["page","page_size","status","priority","ticket_type","assignee","search"].forEach(k => {
+    ["page","page_size","status","priority","ticket_type","assignee","search","parent"].forEach(k => {
       const v = searchParams.get(k);
       if (v) upstream.set(k, v);
     });
@@ -38,6 +39,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: err.detail || "Failed to create ticket" }, { status: res.status });
     }
     const data = await res.json();
+    // Same behaviour as Slack intake: the dev-agent service prepares a coding-agent
+    // session if auto-prepare is on. Fire-and-forget so creation stays fast.
+    fetch(`${DEV_AGENT_SERVICE_URL}/auto-prepare/${data.ticket_id}`, { method: "POST" }).catch(() => {});
     return NextResponse.json({ success: true, data }, { status: 201 });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err?.message }, { status: 500 });

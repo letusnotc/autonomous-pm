@@ -386,6 +386,17 @@ npm install
 npm run dev
 ```
 
+### Tests
+
+```bash
+bash scripts/run-tests.sh
+```
+
+Runs the Ticket Service API tests (CRUD, timeline, links, duplicate detection, sub-tasks), the Dev Agent
+Service tests (code-context ranking and worktrees on a temporary git repo, breakdown validation with a stubbed
+LLM, launch commands, and the MCP server over stdio), the shared LLM client tests, and the Jest tests for the
+Slack intake and GitHub ticket-ID extraction. No API keys or running services are needed.
+
 ### Database (local without Docker)
 
 ```bash

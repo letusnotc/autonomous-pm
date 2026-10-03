@@ -18,11 +18,58 @@ logger = logging.getLogger("priority-service")
 _last_report: Optional[PriorityReport] = None
 _is_running = False
 
+# Minutes between automatic prioritisation runs; 0 disables the schedule.
+PRIORITY_SCHEDULE_MINUTES = int(os.getenv("PRIORITY_SCHEDULE_MINUTES", "60"))
+
+
+class AlreadyRunning(Exception):
+    pass
+
+
+async def run_prioritization(project_key: Optional[str] = None) -> PriorityReport:
+    """Single entry point for both the API and the scheduler, sharing one lock."""
+    global _is_running, _last_report
+    if _is_running:
+        raise AlreadyRunning()
+    _is_running = True
+    try:
+        report = await PriorityAgent().run(filter_project=project_key)
+        _last_report = report
+        return report
+    finally:
+        _is_running = False
+
+
+async def scheduled_prioritization():
+    try:
+        report = await run_prioritization()
+        logger.info(f"Scheduled prioritisation done: {report.total_tickets} tickets, "
+                    f"{report.high_priority_count} high/critical")
+    except AlreadyRunning:
+        logger.info("Scheduled prioritisation skipped – a run is already in progress")
+    except Exception as e:
+        logger.error(f"Scheduled prioritisation failed: {e}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Priority Service starting…")
+    scheduler = None
+    if PRIORITY_SCHEDULE_MINUTES > 0:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        scheduler = AsyncIOScheduler()
+        scheduler.add_job(
+            scheduled_prioritization, "interval",
+            minutes=PRIORITY_SCHEDULE_MINUTES, id="prioritize",
+            max_instances=1, coalesce=True,
+        )
+        scheduler.start()
+        logger.info(f"Auto-prioritisation scheduled every {PRIORITY_SCHEDULE_MINUTES} min")
+    else:
+        logger.info("Auto-prioritisation disabled (PRIORITY_SCHEDULE_MINUTES=0)")
     yield
+    if scheduler:
+        scheduler.shutdown(wait=False)
     logger.info("Priority Service shutting down")
 
 
@@ -42,25 +89,22 @@ app.add_middleware(
 
 @app.get("/health", tags=["meta"])
 async def health():
-    return {"status": "ok", "service": "priority-service"}
+    return {
+        "status": "ok",
+        "service": "priority-service",
+        "schedule_minutes": PRIORITY_SCHEDULE_MINUTES or None,
+    }
 
 
 @app.post("/tickets/prioritize", response_model=PriorityReport)
 async def prioritize_tickets(request: PrioritizeRequest = PrioritizeRequest()):
-    global _is_running, _last_report
-    if _is_running:
-        raise HTTPException(409, "Prioritisation already in progress. Try GET /tickets/priorities for cached result.")
-    _is_running = True
     try:
-        agent = PriorityAgent()
-        report = await agent.run(filter_project=request.project_key)
-        _last_report = report
-        return report
+        return await run_prioritization(request.project_key)
+    except AlreadyRunning:
+        raise HTTPException(409, "Prioritisation already in progress. Try GET /tickets/priorities for cached result.")
     except Exception as e:
         logger.error(f"Prioritisation failed: {e}")
         raise HTTPException(500, str(e))
-    finally:
-        _is_running = False
 
 
 @app.get("/tickets/priorities", response_model=PriorityReport)

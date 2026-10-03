@@ -15,11 +15,42 @@ logger = logging.getLogger("standup-service")
 
 _last_report: Optional[StandupReport] = None
 
+# Crontab expression for the automatic daily standup (default 09:00 Mon–Fri).
+# Set STANDUP_CRON=off to disable.
+STANDUP_CRON     = os.getenv("STANDUP_CRON", "0 9 * * 1-5").strip()
+STANDUP_TIMEZONE = os.getenv("STANDUP_TIMEZONE", "UTC")
+
+
+async def scheduled_standup():
+    from .agent import StandupAgent
+    global _last_report
+    try:
+        _last_report = await StandupAgent().run(StandupTriggerRequest(post_to_slack=True))
+        logger.info(f"Scheduled standup generated (posted to Slack: {_last_report.channel_posted})")
+    except Exception as e:
+        logger.error(f"Scheduled standup failed: {e}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Standup Service starting…")
+    scheduler = None
+    if STANDUP_CRON and STANDUP_CRON.lower() not in ("off", "none", "0", "false"):
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from apscheduler.triggers.cron import CronTrigger
+        scheduler = AsyncIOScheduler()
+        scheduler.add_job(
+            scheduled_standup,
+            CronTrigger.from_crontab(STANDUP_CRON, timezone=STANDUP_TIMEZONE),
+            id="standup", max_instances=1, coalesce=True,
+        )
+        scheduler.start()
+        logger.info(f"Daily standup scheduled: '{STANDUP_CRON}' ({STANDUP_TIMEZONE})")
+    else:
+        logger.info("Daily standup schedule disabled (STANDUP_CRON=off)")
     yield
+    if scheduler:
+        scheduler.shutdown(wait=False)
 
 
 app = FastAPI(
@@ -38,7 +69,12 @@ app.add_middleware(
 
 @app.get("/health", tags=["meta"])
 async def health():
-    return {"status": "ok", "service": "standup-service"}
+    return {
+        "status": "ok",
+        "service": "standup-service",
+        "schedule": None if STANDUP_CRON.lower() in ("", "off", "none", "0", "false")
+                    else f"{STANDUP_CRON} ({STANDUP_TIMEZONE})",
+    }
 
 
 @app.get("/standup/summary", response_model=StandupReport)

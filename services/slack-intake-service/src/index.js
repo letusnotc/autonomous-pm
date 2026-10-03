@@ -1,7 +1,7 @@
 require("dotenv").config();
 const { App, ExpressReceiver } = require("@slack/bolt");
 const { parseTicketFromMessage } = require("./parser");
-const { createTicket } = require("./ticketClient");
+const { intakeTicket, formatConfirmation } = require("./orchestratorClient");
 
 const receiver = new ExpressReceiver({
   signingSecret: process.env.SLACK_SIGNING_SECRET || "dev-secret",
@@ -24,7 +24,7 @@ app.message(async ({ message, client }) => {
     if (!ticketData) return;
 
     console.log(`[intake] Ticket trigger from ${message.user}: ${ticketData.title}`);
-    const ticket = await createTicket({
+    const result = await intakeTicket({
       title:          ticketData.title,
       description:    ticketData.description,
       reportedBy:     message.user,
@@ -36,9 +36,9 @@ app.message(async ({ message, client }) => {
     await client.chat.postMessage({
       channel:   message.channel,
       thread_ts: message.ts,
-      text:      `✅ Ticket created: *${ticket.ticket_id}*`,
+      text:      formatConfirmation(result),
     });
-    console.log(`[intake] Ticket ${ticket.ticket_id} created`);
+    console.log(`[intake] Ticket ${result.ticket.ticket_id} created via ${result.via}`);
   } catch (err) {
     console.error("[intake] Error:", err.message);
   }
@@ -50,7 +50,7 @@ app.command("/ticket", async ({ command, ack, respond }) => {
     const text = command.text?.trim();
     if (!text) { await respond("Usage: `/ticket <description>`"); return; }
 
-    const ticket = await createTicket({
+    const result = await intakeTicket({
       title:       text.split("\n")[0].slice(0, 200),
       description: text,
       reportedBy:  command.user_id,
@@ -59,9 +59,10 @@ app.command("/ticket", async ({ command, ack, respond }) => {
     });
 
     await respond({
-      text:          `✅ Ticket created: *${ticket.ticket_id}*`,
+      text:          formatConfirmation(result),
       response_type: "in_channel",
     });
+    console.log(`[intake] Ticket ${result.ticket.ticket_id} created via ${result.via}`);
   } catch (err) {
     console.error("[intake] Command error:", err.message);
     await respond("❌ Failed to create ticket. Please try again.");

@@ -86,6 +86,9 @@ Copy `.env.example` to `.env`:
 | `SLACK_BOT_TOKEN` | Optional | `xoxb-...` — enables Slack features |
 | `SLACK_SIGNING_SECRET` | Optional | Required for Slack intake service |
 | `GITHUB_WEBHOOK_SECRET` | Optional | For GitHub webhook verification |
+| `PRIORITY_SCHEDULE_MINUTES` | No | Minutes between automatic prioritisation runs (default `60`, `0` = off) |
+| `STANDUP_CRON` | No | Crontab for the automatic Slack standup (default `0 9 * * 1-5`, `off` = disabled) |
+| `STANDUP_TIMEZONE` | No | Timezone for `STANDUP_CRON` (default `UTC`, e.g. `Asia/Kolkata`) |
 
 ---
 
@@ -240,6 +243,8 @@ GET  /health
 
 ### Priority Service (port 3003)
 
+Runs automatically every `PRIORITY_SCHEDULE_MINUTES` (default 60) as well as on demand.
+
 ```
 POST /tickets/prioritize    → PriorityReport
 GET  /tickets/priorities    → PriorityReport (cached)
@@ -247,6 +252,8 @@ GET  /health
 ```
 
 ### Standup Service (port 3004)
+
+Posts a standup to Slack automatically on `STANDUP_CRON` (default 09:00 Mon–Fri, `STANDUP_TIMEZONE`) as well as on demand.
 
 ```
 POST /standup/generate      → StandupReport
@@ -268,6 +275,8 @@ Ticket ID patterns detected: `APM-123`, `closes #42`, `[TICKET:APM-5]`
 
 - **Bot events:** Detects trigger keywords in watched channels → creates tickets
 - **Slash command:** `/ticket <description>` → creates ticket
+- Both run the orchestrator's `slack_message` workflow (create → prioritise) and reply with the AI priority.
+  If the orchestrator is unreachable the ticket is created directly in the Ticket Service.
 - **Slack Events URL:** `https://your-slack-service/slack/events`
 
 ---

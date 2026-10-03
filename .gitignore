@@ -45,6 +45,9 @@ pnpm-debug.log*
 *.sqlite
 *.sqlite3
 
+# ── Service runtime data (agent settings, sessions, briefs, cloned repos) ─────
+services/dev-agent-service/data/
+
 # ── Logs & runtime files (run-local.sh writes to logs/) ───────────────────────
 logs/
 *.log

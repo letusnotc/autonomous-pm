@@ -10,6 +10,7 @@ SERVICES=(
   "Standup Service|http://localhost:3004"
   "Orchestrator|http://localhost:3005"
   "Slack Intake|http://localhost:3006"
+  "Dev Agent|http://localhost:3007"
 )
 
 echo "=== Autonomous PM – Service Health Check ==="

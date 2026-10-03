@@ -133,6 +133,7 @@ services:
       TICKET_SERVICE_URL:      http://ticket-service:3001
       PRIORITY_SERVICE_URL:    http://priority-service:3003
       STANDUP_SERVICE_URL:     http://standup-service:3004
+      DEV_AGENT_SERVICE_URL:   http://dev-agent-service:3007
       REQUEST_TIMEOUT_SECONDS: "30"
       LOG_LEVEL:               info
     depends_on:
@@ -177,6 +178,36 @@ services:
       ticket-service:
         condition: service_healthy
 
+  # ── Dev Agent (breakdown + coding-agent sessions) ──────────────────────────
+  # Worktrees and briefs are written to paths inside this container. To hand
+  # sessions to agents on your machine, run this service natively instead
+  # (see run-local.sh) or mount your repo and workspaces at the same paths.
+  dev-agent-service:
+    build:
+      context: .
+      dockerfile: services/dev-agent-service/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3007:3007"
+    environment:
+      PORT:                      "3007"
+      TICKET_SERVICE_URL:        http://ticket-service:3001
+      TICKET_SERVICE_PUBLIC_URL: http://localhost:3001
+      AGENT_REPO_URL:            ${AGENT_REPO_URL:-}
+      LLM_PROVIDER:              ${LLM_PROVIDER:-gemini}
+      GEMINI_API_KEY:            ${GEMINI_API_KEY:-}
+      GEMINI_MODEL:              ${GEMINI_MODEL:-gemini-1.5-pro}
+      OPENAI_API_KEY:            ${OPENAI_API_KEY:-}
+      OPENAI_MODEL:              ${OPENAI_MODEL:-gpt-4o}
+      ANTHROPIC_API_KEY:         ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL:           ${ANTHROPIC_MODEL:-claude-sonnet-4-5}
+      LOG_LEVEL:                 info
+    volumes:
+      - dev_agent_data:/data
+    depends_on:
+      ticket-service:
+        condition: service_healthy
+
   # ── Web Dashboard ──────────────────────────────────────────────────────────
   web-dashboard:
     build:
@@ -185,12 +216,14 @@ services:
     ports:
       - "3000:3000"
     environment:
-      TICKET_SERVICE_URL: http://ticket-service:3001
-      NODE_ENV:           production
+      TICKET_SERVICE_URL:    http://ticket-service:3001
+      DEV_AGENT_SERVICE_URL: http://dev-agent-service:3007
+      NODE_ENV:              production
     depends_on:
       ticket-service:
         condition: service_healthy
 
 volumes:
   postgres_data:
+  dev_agent_data:
   # mongo_data:   # uncomment if using local MongoDB

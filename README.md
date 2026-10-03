@@ -2,6 +2,14 @@
 
 An AI-native project management platform. Describe a product idea in natural language — a hierarchy of AI agents handles planning, prioritisation, standup reporting, and GitHub integration automatically.
 
+### What makes it different
+
+- **Duplicate detection** – every new ticket (Slack, dashboard or API) is compared with existing ones. The dashboard warns while you type, Slack replies flag likely duplicates, and one click closes a ticket as a duplicate.
+- **AI breakdown** – split a big ticket into 3–8 reviewable sub-tasks with estimates and dependencies; you approve which ones are created.
+- **Explainable timeline** – every change is recorded with who made it and *why*: the priority agent's reasoning, the PR that moved a ticket, notes from coding agents.
+- **Coding-agent hand-off (manual mode)** – one click prepares a session for **Claude Code, Codex or Cursor**: a dedicated git branch + worktree, a context brief with the most relevant code, related tickets, conventions and test commands, and a ready-to-run command. The agent proposes a plan and waits for the developer before changing code.
+- **Ticket tools inside the agent (MCP)** – the coding agent can read the ticket, log progress notes and move it to *In Review* through the bundled `autonomous-pm` MCP server.
+
 ## Architecture
 
 ```
@@ -36,6 +44,7 @@ An AI-native project management platform. Describe a product idea in natural lan
 | `standup-service` | 3004 | Python / FastAPI | LLM standup generator |
 | `orchestrator-service` | 3005 | Python / FastAPI + LangGraph | Workflow coordinator |
 | `slack-intake-service` | 3006 | Node.js / Slack Bolt | Slack event listener |
+| `dev-agent-service` | 3007 | Python / FastAPI | AI breakdown, coding-agent sessions, ticket MCP server |
 
 ## Quick Start (Local with Docker)
 
@@ -212,7 +221,20 @@ GET    /tickets/{id}                  → Ticket
 PUT    /tickets/{id}                  → Ticket (PATCH semantics)
 POST   /tickets/{id}/assign           → Ticket
 DELETE /tickets/{id}                  → { deleted: true }
+
+GET    /tickets?parent=APM-4          → sub-tasks of a ticket
+GET    /tickets/{id}/events           → timeline (who changed what, and why)
+POST   /tickets/{id}/events           → add a timeline entry (e.g. a progress note)
+GET    /tickets/{id}/similar          → likely duplicates / related tickets
+POST   /tickets/similar               → similar tickets for a draft { title, description }
+POST   /tickets/{id}/subtasks         → create several sub-tasks at once
 ```
+
+`PUT /tickets/{id}` also accepts `parent_id` / `duplicate_of` (`"APM-3"` to link, `""` to clear) and the
+timeline metadata `actor` and `reason`, which are recorded on the ticket's timeline rather than stored on it.
+
+Duplicate detection uses TF-IDF cosine similarity (no API key needed). New tickets scoring ≥ 0.35 against an
+existing ticket get a *possible duplicate* timeline entry automatically.
 
 **Canonical enum values** (use these exact strings):
 
@@ -236,10 +258,49 @@ GET  /health
 
 | Trigger | Description | Required field |
 |---|---|---|
-| `slack_message` | Create ticket + prioritise | `slack_payload` |
+| `slack_message` | Create ticket → check duplicates → prioritise → prepare agent session* | `slack_payload` |
 | `github_event` | Record GitHub event | `github_payload` |
 | `manual_standup` | Generate standup now | none |
-| `full_pipeline` | Create + prioritise + standup | `slack_payload` |
+| `full_pipeline` | `slack_message` steps + standup | `slack_payload` |
+
+\* only when *auto-prepare* is enabled in the dashboard's Agent settings.
+
+### Dev Agent Service (port 3007)
+
+```
+GET  /settings, PUT /settings          → linked repo, default agent, auto-prepare, worktrees
+GET  /repo/status                      → linked repo health + whether an LLM key is configured
+POST /tickets/{id}/breakdown           → AI-proposed sub-tasks (nothing created yet)
+POST /tickets/{id}/breakdown/apply     → create the approved sub-tasks
+POST /tickets/{id}/session             → prepare a coding-agent session { agent, include_ai_plan }
+GET  /tickets/{id}/session             → the prepared session (commands, branch, worktree)
+GET  /tickets/{id}/brief               → the Markdown context brief
+POST /auto-prepare/{id}                → used by the orchestrator / dashboard for new tickets
+```
+
+**How a session is prepared (manual mode – no code is changed):**
+
+1. Ticket details, timeline, parent/sub-tasks and similar tickets are collected.
+2. A worktree is created at `<workspaces>/<repo>/APM-x` on a new branch `apm/APM-x-<slug>`; your main checkout is never touched.
+3. The code is searched (`git grep`) for the ticket's keywords; files are ranked TF-IDF-style and the best ones get focused excerpts and their recent commits. Conventions (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules`) and test commands are detected.
+4. With an LLM key, acceptance criteria and a suggested plan are drafted.
+5. `.apm/APM-x.md` (the brief) and MCP configs are written into the worktree and hidden via `.git/info/exclude`.
+6. The dashboard shows a ready-to-run command per agent:
+
+```bash
+claude "Read .apm/APM-7.md and work on ticket APM-7. …" --mcp-config .apm/mcp.json   # Claude Code
+codex  "Read .apm/APM-7.md and work on ticket APM-7. …"                              # Codex
+cursor "<worktree>"   # then "Send the prompt to Cursor chat" (deep link) or use cursor-agent
+```
+
+**Ticket MCP server** (`services/dev-agent-service/mcp/ticket_mcp_server.py`, standard library only) gives the
+agent these tools: `get_ticket`, `get_ticket_timeline`, `find_similar_tickets`, `list_subtasks`,
+`search_tickets`, `add_progress_note`, `update_ticket_status` (In Progress / In Review / Blocked – *Done* is left
+to the merged PR). Claude Code gets it via `--mcp-config`, Cursor via `.cursor/mcp.json` in the worktree, and
+Codex via the TOML snippet shown in the dashboard.
+
+> Run the Dev Agent Service natively (`run-local.sh`) when handing sessions to agents on your machine – inside
+> Docker the worktree paths would be container paths.
 
 ### Priority Service (port 3003)
 
@@ -360,7 +421,8 @@ autonomous-pm/
 │   ├── priority-service/        # Unit 4 – Python/FastAPI + LLM
 │   ├── standup-service/         # Unit 5 – Python/FastAPI + LLM
 │   ├── slack-intake-service/    # Unit 1 – Node.js/Slack Bolt
-│   └── github-status-service/   # Unit 3 – Node.js/Express
+│   ├── github-status-service/   # Unit 3 – Node.js/Express
+│   └── dev-agent-service/       # Unit 8 – breakdown, coding-agent sessions, MCP server
 │
 ├── apps/
 │   └── web-dashboard/           # Unit 7 – Next.js 14

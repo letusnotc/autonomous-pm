@@ -36,7 +36,9 @@ class WorkflowState(BaseModel):
     slack_payload:         Optional[SlackMessagePayload]  = None
     github_payload:        Optional[GitHubEventPayload]   = None
     created_ticket:        Optional[Dict[str, Any]]       = None
+    duplicates:            List[Dict[str, Any]]           = Field(default_factory=list)
     priority_report:       Optional[Dict[str, Any]]       = None
+    agent_session:         Optional[Dict[str, Any]]       = None
     standup_report:        Optional[Dict[str, Any]]       = None
     post_standup_to_slack: bool          = True
     standup_channel:       Optional[str] = None
@@ -53,5 +55,7 @@ class OrchestrateResponse(BaseModel):
     started_at:      datetime
     finished_at:     datetime
     created_ticket:  Optional[Dict[str, Any]] = None
+    duplicates:      List[Dict[str, Any]]     = Field(default_factory=list)
     priority_report: Optional[Dict[str, Any]] = None
+    agent_session:   Optional[Dict[str, Any]] = None
     standup_report:  Optional[Dict[str, Any]] = None

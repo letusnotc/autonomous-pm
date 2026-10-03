@@ -32,6 +32,36 @@ async def create_ticket_node(state: WorkflowState) -> WorkflowState:
     return state
 
 
+async def check_duplicates_node(state: WorkflowState) -> WorkflowState:
+    logger.info("[check_duplicates_node] starting")
+    if not state.created_ticket:
+        return state
+    try:
+        state.duplicates = await clients.find_duplicates(state.created_ticket["ticket_id"])
+        state.steps_completed.append(f"check_duplicates:found={len(state.duplicates)}")
+    except Exception as e:
+        err = f"check_duplicates_node failed: {e}"
+        logger.error(err)
+        state.errors.append(err)
+    return state
+
+
+async def prepare_agent_node(state: WorkflowState) -> WorkflowState:
+    """Optional step - a missing dev-agent service is logged, not treated as a failure."""
+    logger.info("[prepare_agent_node] starting")
+    if not state.created_ticket:
+        return state
+    try:
+        result = await clients.auto_prepare_agent(state.created_ticket["ticket_id"])
+        if result.get("prepared"):
+            state.agent_session = result["session"]
+        state.steps_completed.append(f"prepare_agent:prepared={bool(result.get('prepared'))}")
+    except Exception as e:
+        logger.warning(f"[prepare_agent_node] skipped: {e}")
+        state.steps_completed.append("prepare_agent:unavailable")
+    return state
+
+
 async def prioritize_node(state: WorkflowState) -> WorkflowState:
     logger.info("[prioritize_node] starting")
     try:

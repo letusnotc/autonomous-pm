@@ -48,7 +48,10 @@ async function intakeTicket(payload) {
     if (data.created_ticket) {
       const id = data.created_ticket.ticket_id;
       const priority = data.priority_report?.tickets?.find(t => t.ticket_id === id) || null;
-      return { ticket: data.created_ticket, priority, via: "orchestrator" };
+      return {
+        ticket: data.created_ticket, priority, via: "orchestrator",
+        duplicates: data.duplicates || [], agentSession: data.agent_session || null,
+      };
     }
     // Workflow ran but ticket creation failed – try the Ticket Service directly.
   } catch (err) {
@@ -57,15 +60,25 @@ async function intakeTicket(payload) {
   }
 
   const ticket = await createTicket(payload);
-  return { ticket, priority: null, via: "direct" };
+  return { ticket, priority: null, via: "direct", duplicates: [], agentSession: null };
 }
 
-/** Slack mrkdwn confirmation, including the AI priority when available. */
-function formatConfirmation({ ticket, priority }) {
+/** Slack mrkdwn confirmation with AI priority, duplicate warnings and agent session. */
+function formatConfirmation({ ticket, priority, duplicates = [], agentSession = null }) {
   let text = `✅ Ticket created: *${ticket.ticket_id}* – ${ticket.title}`;
   if (priority) {
     text += `\n:bar_chart: AI priority: *${priority.assigned_priority}* (${priority.priority_score}/100)`;
     if (priority.reasoning) text += `\n> ${priority.reasoning}`;
+  }
+  if (duplicates.length) {
+    const list = duplicates
+      .map(d => `*${d.ticket_id}* – ${d.title} (${Math.round(d.score * 100)}% similar, ${d.status})`)
+      .join("\n• ");
+    text += `\n:warning: Possible duplicate of:\n• ${list}`;
+  }
+  if (agentSession) {
+    const where = agentSession.branch_created ? ` on branch \`${agentSession.branch}\`` : "";
+    text += `\n:robot_face: Coding-agent session ready${where} – open the ticket in the dashboard to start it.`;
   }
   return text;
 }

@@ -89,7 +89,9 @@ async def orchestrate_start(request: OrchestrateRequest):
         started_at=final_state.started_at,
         finished_at=final_state.finished_at,
         created_ticket=final_state.created_ticket,
+        duplicates=final_state.duplicates,
         priority_report=final_state.priority_report,
+        agent_session=final_state.agent_session,
         standup_report=final_state.standup_report,
     )
 
@@ -97,14 +99,16 @@ async def orchestrate_start(request: OrchestrateRequest):
 @app.get("/orchestrate/workflows")
 async def list_workflows():
     return {"workflows": [
-        {"trigger": "slack_message",  "nodes": ["create_ticket", "prioritize"]},
+        {"trigger": "slack_message",  "nodes": ["create_ticket", "check_duplicates", "prioritize", "prepare_agent"]},
         {"trigger": "github_event",   "nodes": ["pass-through"]},
         {"trigger": "manual_standup", "nodes": ["standup"]},
-        {"trigger": "full_pipeline",  "nodes": ["create_ticket", "prioritize", "standup"]},
+        {"trigger": "full_pipeline",  "nodes": ["create_ticket", "check_duplicates", "prioritize",
+                                                "prepare_agent", "standup"]},
     ]}
 
 
 @app.get("/health")
 async def health():
-    statuses = await clients.check_all_services()
-    return {"status": "ok" if all(statuses.values()) else "degraded", "downstream": statuses}
+    statuses, optional = await clients.check_services_with_optional()
+    return {"status": "ok" if all(statuses.values()) else "degraded",
+            "downstream": statuses, "optional": optional}

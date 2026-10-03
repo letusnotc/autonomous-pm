@@ -1,9 +1,10 @@
 """
 clients.py – HTTP clients to all downstream services.
 """
+import asyncio
 import os
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import httpx
 
 logger = logging.getLogger("orchestrator.clients")
@@ -11,6 +12,7 @@ logger = logging.getLogger("orchestrator.clients")
 TICKET_SERVICE_URL   = os.getenv("TICKET_SERVICE_URL",   "http://localhost:3001")
 PRIORITY_SERVICE_URL = os.getenv("PRIORITY_SERVICE_URL", "http://localhost:3003")
 STANDUP_SERVICE_URL  = os.getenv("STANDUP_SERVICE_URL",  "http://localhost:3004")
+DEV_AGENT_SERVICE_URL = os.getenv("DEV_AGENT_SERVICE_URL", "http://localhost:3007")
 TIMEOUT              = int(os.getenv("REQUEST_TIMEOUT_SECONDS", "30"))
 
 
@@ -66,21 +68,54 @@ async def generate_standup(post_to_slack: bool = True, channel: Optional[str] = 
         return resp.json()
 
 
-async def check_health(url: str, name: str) -> bool:
+async def find_duplicates(ticket_id: str, min_score: float = 0.35) -> List[Dict[str, Any]]:
+    async with httpx.AsyncClient(timeout=TIMEOUT) as c:
+        resp = await c.get(f"{TICKET_SERVICE_URL}/tickets/{ticket_id}/similar",
+                           params={"limit": 3, "min_score": min_score})
+        resp.raise_for_status()
+        return resp.json()
+
+
+async def auto_prepare_agent(ticket_id: str) -> Dict[str, Any]:
+    """The dev-agent service decides (via its auto_prepare setting) whether to act."""
+    async with httpx.AsyncClient(timeout=180) as c:
+        resp = await c.post(f"{DEV_AGENT_SERVICE_URL}/auto-prepare/{ticket_id}")
+        resp.raise_for_status()
+        return resp.json()
+
+
+async def check_health(client: httpx.AsyncClient, url: str, name: str) -> bool:
     try:
-        async with httpx.AsyncClient(timeout=5) as c:
-            resp = await c.get(f"{url}/health")
-            ok = resp.status_code == 200
-            logger.info(f"  {'✓' if ok else '✗'} {name}")
-            return ok
+        resp = await client.get(f"{url}/health")
+        ok = resp.status_code == 200
+        logger.info(f"  {'✓' if ok else '✗'} {name}")
+        return ok
     except Exception as e:
         logger.warning(f"  ✗ {name} unreachable: {e}")
         return False
 
 
+CORE_SERVICES = {
+    "ticket_service":   (TICKET_SERVICE_URL,   "Ticket Service"),
+    "priority_service": (PRIORITY_SERVICE_URL, "Priority Service"),
+    "standup_service":  (STANDUP_SERVICE_URL,  "Standup Service"),
+}
+OPTIONAL_SERVICES = {
+    "dev_agent_service": (DEV_AGENT_SERVICE_URL, "Dev Agent Service"),
+}
+
+
+async def _check(services: Dict[str, tuple]) -> Dict[str, bool]:
+    # One shared client (creating one is slow) and concurrent checks keep /health fast.
+    async with httpx.AsyncClient(timeout=5) as c:
+        results = await asyncio.gather(*(check_health(c, url, name) for url, name in services.values()))
+    return dict(zip(services, results))
+
+
 async def check_all_services() -> Dict[str, bool]:
-    return {
-        "ticket_service":   await check_health(TICKET_SERVICE_URL,   "Ticket Service"),
-        "priority_service": await check_health(PRIORITY_SERVICE_URL, "Priority Service"),
-        "standup_service":  await check_health(STANDUP_SERVICE_URL,  "Standup Service"),
-    }
+    return await _check(CORE_SERVICES)
+
+
+async def check_services_with_optional() -> Tuple[Dict[str, bool], Dict[str, bool]]:
+    results = await _check({**CORE_SERVICES, **OPTIONAL_SERVICES})
+    return ({k: results[k] for k in CORE_SERVICES}, {k: results[k] for k in OPTIONAL_SERVICES})

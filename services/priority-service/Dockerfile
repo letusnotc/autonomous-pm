@@ -12,6 +12,8 @@ COPY packages/slack-client/ ./packages/slack-client/
 # Copy service source
 COPY services/priority-service/src/ ./src/
 
+# agent.py imports the shared packages from here
+ENV PYTHONPATH=/app/packages/llm-client:/app/packages/slack-client
 ENV PORT=3003
 EXPOSE 3003
 CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${PORT}"]

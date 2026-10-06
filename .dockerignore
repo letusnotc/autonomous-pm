@@ -1,0 +1,11 @@
+# Build context for the services built from the repo root
+**/node_modules
+**/.next
+**/__pycache__
+**/*.pyc
+.venv
+.git
+logs
+**/data
+**/*.db
+.env

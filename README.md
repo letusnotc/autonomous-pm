@@ -6,6 +6,14 @@ breaking work down, daily standups, GitHub status sync – and handing tickets t
 
 📄 **[Project overview with diagrams (PDF)](PROJECT_OVERVIEW.pdf)** · [Markdown version](PROJECT_OVERVIEW.md)
 
+## Demo
+
+[![Watch the 1:47 demo of Autonomous PM](docs/demo/demo-thumbnail.jpg)](docs/demo/autonomous-pm-demo.mp4)
+
+A 1:47 walkthrough recorded from the app running locally: live duplicate detection while creating a ticket,
+sub-tasks, the explainable activity timeline, the coding-agent hand-off – and a coding agent reporting back
+through the MCP server while the dashboard updates live. ([Open the video](docs/demo/autonomous-pm-demo.mp4))
+
 ## Features
 
 - **Ticket board** – web dashboard with list and board views, filters, search, and light/dark mode.
@@ -488,6 +496,7 @@ autonomous-pm/
 ├── README.md
 ├── PROJECT_OVERVIEW.md / .pdf    # Feature overview with diagrams
 ├── docs/screenshots/             # Dashboard screenshots used in this README
+├── docs/demo/                    # Demo video and its thumbnail
 ├── docker-compose.yml            # Full stack with Docker (PostgreSQL + all services)
 ├── run-local.sh                  # Full stack without Docker (SQLite)
 ├── .env.example                  # Environment variable template

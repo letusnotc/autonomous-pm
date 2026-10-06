@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Ticket, TicketEvent, SimilarTicket } from '@/lib/types';
-import { updateTicket, deleteTicket, getEvents, getSimilar, getSubtasks } from '@/lib/api';
+import { updateTicket, deleteTicket, getEvents, getSimilar, getSubtasks, getTicket } from '@/lib/api';
 import { X, Loader2, Pencil, Trash2, CornerLeftUp, Copy, Link2Off, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import {
@@ -96,11 +96,23 @@ export function TicketDrawer({ ticket, onClose, onUpdated, onDeleted, onOpenTick
   const [subtasks, setSubtasks] = useState<Ticket[]>([]);
 
   const id = ticket.ticket_id;
+  const eventCount = useRef(0);
+  const onUpdatedRef = useRef(onUpdated);
+  onUpdatedRef.current = onUpdated;
 
   const loadEvents = useCallback(async () => {
     const res = await getEvents(id);
-    setEvents(res.success && res.data ? res.data : []);
+    const next = res.success && res.data ? res.data : [];
+    const seen = eventCount.current;
+    eventCount.current = next.length;
+    setEvents(next);
     setEventsLoading(false);
+    // Someone else (a coding agent via MCP, GitHub, an AI agent) changed the
+    // ticket: refresh it so the header and the list match the timeline.
+    if (seen && next.length > seen && next.slice(seen).some(e => e.kind !== 'note')) {
+      const fresh = await getTicket(id);
+      if (fresh.success && fresh.data) onUpdatedRef.current(fresh.data);
+    }
   }, [id]);
 
   const loadSubtasks = useCallback(async () => {
@@ -108,7 +120,7 @@ export function TicketDrawer({ ticket, onClose, onUpdated, onDeleted, onOpenTick
     setSubtasks(res.success && res.data ? [...res.data.tickets].reverse() : []);
   }, [id]);
 
-  useEffect(() => { setTab('overview'); setDismissed(false); setEventsLoading(true); }, [id]);
+  useEffect(() => { setTab('overview'); setDismissed(false); setEventsLoading(true); eventCount.current = 0; }, [id]);
   useEffect(() => { loadEvents(); }, [loadEvents, ticket.updated_at]);
 
   // Coding agents log notes through MCP without changing the ticket itself, so

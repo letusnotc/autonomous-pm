@@ -36,6 +36,25 @@ def test_rank_files_finds_the_relevant_code(git_repo):
     assert "web/settings_page.tsx" not in [f["path"] for f in ranked]
 
 
+def test_source_code_outranks_tests_and_docs_that_mention_the_same_words(git_repo):
+    (git_repo / "tests").mkdir()
+    # A test and a doc that use the same words as the code they describe
+    (git_repo / "tests" / "test_scheduler.py").write_text(
+        "def test_start_scheduler():\n"
+        "    scheduler = start_scheduler()  # scheduler add_job cron\n"
+        "    assert post_message('#standup', 'digest')\n", encoding="utf-8")
+    (git_repo / "docs").mkdir()
+    (git_repo / "docs" / "standup.md").write_text(
+        "The standup scheduler runs a cron job that calls post_message.\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(git_repo), "add", "."], check=True)
+
+    terms = context.extract_terms("Standup digest posted twice on Mondays",
+                                  "Probably the cron scheduler or post_message runs twice")
+    ranked = [f["path"] for f in context.rank_files(git_repo, terms, git.ls_files(git_repo))]
+    assert set(ranked[:2]) == {"services/standup/scheduler.py", "services/standup/slack.py"}
+    assert ranked.index("tests/test_scheduler.py") > 1 and ranked.index("docs/standup.md") > 1
+
+
 def test_excerpts_are_short_focused_windows(git_repo):
     snippets = context.excerpts(git_repo, "services/standup/scheduler.py", ["scheduler", "add_job"])
     assert snippets

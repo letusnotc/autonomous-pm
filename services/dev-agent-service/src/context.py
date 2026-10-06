@@ -95,9 +95,25 @@ def rank_files(repo: Path, terms: List[str], files: List[str]) -> List[Dict]:
             if term not in hits.setdefault(path, []):
                 hits[path].append(term)
 
-    # Prefer files that match several different terms over one noisy term.
-    ranked = sorted(scores, key=lambda p: scores[p] * (1 + 0.5 * (len(hits[p]) - 1)), reverse=True)
+    # Prefer files that match several different terms over one noisy term, and
+    # source code over tests and docs that merely mention the same words.
+    for p in scores:
+        scores[p] *= (1 + 0.5 * (len(hits[p]) - 1)) * _kind_weight(p)
+    ranked = sorted(scores, key=scores.get, reverse=True)
     return [{"path": p, "score": round(scores[p], 2), "matched": hits[p]} for p in ranked[:MAX_FILES]]
+
+
+_TEST_PATH = re.compile(
+    r"(^|/)(tests?|__tests__|spec)/|(^|/)test_[^/]*$|_test\.(py|go)$|\.(test|spec)\.[cm]?[jt]sx?$", re.IGNORECASE)
+_DOC_PATH = re.compile(r"(^|/)docs?/|\.(md|mdx|rst|txt)$", re.IGNORECASE)
+
+
+def _kind_weight(path: str) -> float:
+    if _TEST_PATH.search(path):
+        return 0.4
+    if _DOC_PATH.search(path):
+        return 0.5
+    return 1.0
 
 
 def _is_code_like(term: str) -> bool:

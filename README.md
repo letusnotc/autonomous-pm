@@ -8,11 +8,11 @@ breaking work down, daily standups, GitHub status sync – and handing tickets t
 
 ## Demo
 
-[![Watch the 1:47 demo of Autonomous PM](docs/demo/demo-thumbnail.jpg)](docs/demo/autonomous-pm-demo.mp4)
+[![Watch the 1:47 demo of Autonomous PM](docs/demo/demo-thumbnail.jpg)](https://drive.google.com/file/d/1n1SGomRxTWfjDXmavXsadAd7eT2uYY6m/view?usp=sharing)
 
 A 1:47 walkthrough recorded from the app running locally: live duplicate detection while creating a ticket,
 sub-tasks, the explainable activity timeline, the coding-agent hand-off – and a coding agent reporting back
-through the MCP server while the dashboard updates live. ([Open the video](docs/demo/autonomous-pm-demo.mp4))
+through the MCP server while the dashboard updates live. ([Open the video](https://drive.google.com/file/d/1n1SGomRxTWfjDXmavXsadAd7eT2uYY6m/view?usp=sharing))
 
 ## Features
 
@@ -496,7 +496,7 @@ autonomous-pm/
 ├── README.md
 ├── PROJECT_OVERVIEW.md / .pdf    # Feature overview with diagrams
 ├── docs/screenshots/             # Dashboard screenshots used in this README
-├── docs/demo/                    # Demo video and its thumbnail
+├── docs/demo/                    # Demo video thumbnail (the video is on Google Drive)
 ├── docker-compose.yml            # Full stack with Docker (PostgreSQL + all services)
 ├── run-local.sh                  # Full stack without Docker (SQLite)
 ├── .env.example                  # Environment variable template

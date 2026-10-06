@@ -26,6 +26,18 @@ breaking work down, daily standups, GitHub status sync – and handing tickets t
 - **Ticket tools inside the agent (MCP)** – the coding agent can read the ticket, log progress notes and move
   it to *In Review* through the bundled `autonomous-pm` MCP server.
 
+## Screenshots
+
+| Ticket board (light) | Board view (dark) |
+|---|---|
+| ![Ticket board](docs/screenshots/01-dashboard-light.png) | ![Board view in dark mode](docs/screenshots/02-board-dark.png) |
+| **Live duplicate check while typing** | **Duplicate warning in the ticket panel** |
+| ![New ticket dialog with similar tickets](docs/screenshots/03-new-ticket-duplicate-check.png) | ![Possible duplicate notice](docs/screenshots/04-ticket-duplicate-warning.png) |
+| **Sub-tasks and AI breakdown** | **Explainable activity timeline** |
+| ![Sub-tasks with progress](docs/screenshots/05-subtasks.png) | ![Activity timeline with AI reasoning](docs/screenshots/06-activity-timeline.png) |
+| **Coding-agent hand-off** | **Agent settings (dark)** |
+| ![Coding agent session for Claude Code](docs/screenshots/07-coding-agent-session.png) | ![Agent settings dialog](docs/screenshots/08-agent-settings-dark.png) |
+
 ## Architecture
 
 ```mermaid
@@ -475,6 +487,7 @@ New columns are added to existing SQL databases automatically on startup.
 autonomous-pm/
 ├── README.md
 ├── PROJECT_OVERVIEW.md / .pdf    # Feature overview with diagrams
+├── docs/screenshots/             # Dashboard screenshots used in this README
 ├── docker-compose.yml            # Full stack with Docker (PostgreSQL + all services)
 ├── run-local.sh                  # Full stack without Docker (SQLite)
 ├── .env.example                  # Environment variable template
